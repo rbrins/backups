@@ -1,0 +1,94 @@
+
+* Overview
+I've been doing manual backups for a while and finally in a place that I can begin scripting this backup (mostly because I'm somewhat organized now).
+
+I'd like to have a few levels of backup and recovery tiers, similar to how we would in a corp environment. By this I mean that 
+- I want to have the data itself backup at regular intervals 
+  - for my threat model this is roughly once every two months but I'll do it monthly
+- I want to have the methods needed to /view/ the data
+  - for half of my files are text based I don't have to worry about this and can just make sure I have a very basic text editor available. 
+  - The other part consist of PDF, images, and libreoffice files. I'll just make sure to include some of those in this backup as well. This requirement for the threat model is MUCH less since none of it is proprietary formats, and I'll probably keep one liveUSB that has all of the tools I need on it once / year.
+  - Decrypting / Unziping the data tools
+
+For the data, I need to ensure the following are backed up.
+
+- Bitwarden
+- ~/.ssh keys 
+- ~/.dotfiles 
+- ~/org files (which includes my org-roam, but not the db since that can be rebuilt with a command)
+- ~/Documents (all of those PDFs, images, and libreoffice files
+- ~/Pictures (anything I've decided is worth store for storing sake, lowest priority of availability)
+- ~/Projects (anything here is already in a git repo, probably on github, there are two that aren't on any remote git repo. Plus some of the remote git repos have gitignores with files I'm interested in keeping)
+
+* Backup Methods
+
+** Incremental 
+
+** Full
+
+* Backup Solutions 
+
+- I was introduced to restic and like the idea of being able to sent it to s3 buckets, sftp, or local. It includes encryption by default and is incremental. 
+  - It is well maintained now but doesn't have the longevity I'd like to see.
+- Create my own that zips up folders, uses gpg to encrypt, then pushes it out to the storage locations. 
+  - This would be able to use the encryption of a well maintained GPG
+  - These are full backups though so I would need to eat up the extra space or check against a list of last backed up times to the modified time of a file (definitely not going to try inner-file incremental)
+
+* Making my Own
+I'm going to roll my own for learning and customizability. 
+For the archive I'm going to use ~TAR~ and for the encryption I'm going to use ~GPG~.
+
+1. Take the TAR of everything I want
+2. Confirm that it was successful (exit if not)
+3. Encrypt tar output with my public key
+4. Manual verify that is can be decrypted and untar'd (do the recovery)
+5. Delete oldest timestampped full backup (probably 4 or 5 months worth)
+
+
+* Get Backup Settings
+- should be a file in the ~~/backups~ directory named ~.backups~ that will specify any useful information like the last backed up date, directories or files to add, and any to exclude.
+
+** ~/backups/.backups file format
+- Recursive to the lowest directory.
+  - Example, ~dir1~ below would recurse to everything under ~dir1~
+  - ~dir2~ would only recurse to everything below ~dir2~
+  - ~dir3~ would only backup the single file
+
+- Then the excludes options searches through the includes list and removes any excluded items
+  - starting with recursion to the lowest directory
+  - end with specific file removalbes
+
+
+#+BEGIN_SRC yaml
+---
+include:
+  - "dir1"
+  - "dir2/subdir"
+  - "dir3/specific_file"
+
+exclude:
+  - "dir4"
+  - "dir1/subdir1"
+  - "dir1/specific_file"
+
+last_backup: timestamp
+backup_type: "incremental" or "full"
+
+
+#+END_SRC
+
+
+* TAR everything based on the output of the settings
+- using [[https://help.ubuntu.com/community/BackupYourSystem/TAR][Ubuntu's BackupYourSystem]] for information
+
+#+BEGIN_SRC shell
+timestamp=$(data -I)
+tar -cvpzf ~/backups/$timestamp-backup.tar.gz --exclude=~/backups/$timestamp-backup.tar.gz 
+#+END_SRC
+
+* TAR multiple files 
+- using [[https://kb.iu.edu/d/acfi][Use tar to combine multiple files into an archive file]]
+
+#+BEGIN_SRC shell
+tar -cvf my_files.tar file1 file2
+#+END_SRC

@@ -1,0 +1,124 @@
+#+TITLE: Backup Script with Literate Programming
+#+AUTHOR: Russell Brinson
+#+DATE: [2023-08-06 Sun]
+
+* Overview
+
+Literate programming to be able to test individual steps in a backup or run all at once by tangling everything (possible exporting for cron jobs later)
+
+* Modules and Argument Parsing
+
+#+BEGIN_SRC python :tangle yes
+import yaml
+import argparse
+import os
+
+parser = argparse.ArgumentParser(prog='Simple Backups')
+parser.add_argument('-b', '--backup-file', required=False, default=".backups.yml")
+
+args = parser.parse_args()
+
+backup_yaml = args.backup_file
+
+userHomePath = os.path.expanduser('~')
+#+END_SRC
+
+* Reading the Backup Configuration
+
+** Sample Yaml File
+#+BEGIN_SRC yaml
+---
+include:
+  - "dir1"
+  - "dir2/subdir"
+  - "dir3/specific_file"
+
+exclude:
+  - "dir4"
+  - "dir1/subdir1"
+  - "dir1/specific_file"
+
+last_backup: timestamp
+backup_type: "incremental" or "full"
+#+END_SRC
+
+** Reading the .backup.yml file
+#+BEGIN_SRC python :tangle yes
+with open(backup_yaml, 'r') as config_file:
+    backup_config = yaml.safe_load(config_file)
+
+  #print(backup_config)
+  #print(backup_config['backup_type'])
+#+END_SRC
+
+** backup_config['include'] is a list
+#+BEGIN_SRC python :tangle no
+['~/.ssh', '~/.dotfiles', '~/org', '~/Documents', '~/Pictures', '~/projects']
+<class 'list'>
+#+END_SRC
+
+
+* Functions to Create file list from config file
+
+#+BEGIN_SRC python :tangle yes
+def expandPath(path):
+    """Adding the home directory path if a  ~ is present"""
+    if path[0] == "~":
+        return userHomePath + path[1:]
+    return path
+
+def expandHomePaths(pathList):
+    """Returns list of all expanded paths, to pass into os.listdir"""
+    expandedLists = []
+    for path in pathList:
+        expandedLists.append(expandPath(path))
+    return expandedLists
+
+#def addPath2DirList(directory):
+#    """Returns directory list of contents with full path"""
+#    fullPathList = []
+#    for child in os.listdir(directory):
+#        fullPathList.append(directory + "/" + child)
+#    return fullPathList
+
+def addFullPath(path, directory):
+    return (directory + "/" + path)
+          
+def getAllSubContents(directory):
+    """Recurses through a directory for all subcontents"""
+    allSubContents = []
+    for path in os.listdir(directory):
+        fullPath = addFullPath(path, directory)
+        if os.path.isdir(fullPath) == True:
+            #print(fullPath)
+            allSubContents.extend(getAllSubContents(fullPath))
+        elif os.path.isfile(fullPath):
+            allSubContents.append(directory + "/" + path)
+    return allSubContents
+
+def listAllContents(homePath_BackupConfig):
+    """Returns list of all child contents of the backup list"""
+    # this expects the backup list to have full paths generated
+    allContentsList = []
+    for path in homePath_BackupConfig:         
+        try:
+            allContentsList.extend(getAllSubContents(path))
+        except Exception as e:
+            print(e)
+    return allContentsList
+
+#+END_SRC
+
+* Full backup type selection
+If the full backup type is selected then I'm just going to create a file list of what to include, then remove anything excluded.
+
+#+BEGIN_SRC python :tangle yes
+if(backup_config['backup_type'] == "full"):
+    print("Proceeding to full backup")
+allContents = listAllContents(expandHomePaths(backup_config['include']))
+
+with open("./.tmpAllContentsList","w") as tmpList:
+    for item in allContents:
+        tmpList.write(item + "\n")
+
+#+END_SRC
