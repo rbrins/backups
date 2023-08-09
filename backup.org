@@ -3,7 +3,6 @@
 #+DATE: [2023-08-06 Sun]
 
 * Overview
-
 Literate programming to be able to test individual steps in a backup or run all at once by tangling everything (possible exporting for cron jobs later)
 
 * Modules and Argument Parsing
@@ -20,7 +19,8 @@ parser.add_argument('-c', '--backupConfig', required=False, default=".backups.ym
 args = parser.parse_args()
 
 # Global Variables based on System
-timestamp = str(datetime.datetime.now().timestamp())[:10]
+float_timestamp = datetime.datetime.now().timestamp()
+timestamp = str(float_timestamp)[:10]
 userHomePath = os.path.expanduser('~')
 
 # Optional Argument Global Variables
@@ -82,7 +82,6 @@ Will make sure that each list is only unique valuies, which allows us to use rem
 def removeListFromList(list1, list2):
     return list(set(list1) - set(list2))
 #+END_SRC
-
 
 * Reading the Backup Configuration
 ** Sample Yaml File
@@ -183,15 +182,37 @@ if(backup_type == "full"):
 ** Per File Incremental Backup Type
 Compare last backup time with last modified time on the file.
 If the backup time is older than the last modified, add the file to the incremental backup.
-
+*** Per File Incremental Methods
+last modified of a time with ~os.path.getmtime('path')~
 #+BEGIN_SRC python :tangle yes
+def dictContents_LastModified(fileList):
+    pass
 
-
-if((backup_type == "incremental") and (last_backup_timestamp > 0)):
-    print("[.] Proceeding to incremental backup")
-  
+def checkTimestamp(path):
+    if os.path.getmtime(path) > last_backup_timestamp:
+        # this is a file I want to backup
+        return path
+    else:
+        # this is file that should be in the backup already
+        return ""
 #+END_SRC
 
+*** finalAllFiles Creation
+#+BEGIN_SRC python :tangle yes
+if((backup_type == "incremental") and (last_backup_timestamp > 0)):
+    print("[.] Proceeding to incremental backup")
+    needFilter_AllFiles = set(list(map(checkTimestamp, comparedAllFiles)))
+    finalAllFiles = list(needFilter_AllFiles)[1:]
+#+END_SRC
+
+** Write Timestamp information to Backup File
+
+#+BEGIN_SRC python :tangle yes
+backup_config['last_backup'] = float_timestamp
+
+with open(backup_yaml, "w") as update_config:
+    yaml.dump(backup_config, update_config)
+#+END_SRC
 
 * Writing the Tar File
 Not sure if this actually compresses anything.
@@ -202,7 +223,6 @@ print("[.] Starting to open and write Tar File")
 with tarfile.open(tarFileName, "x:gz") as tf:
     for item in finalAllFiles:
         tf.add(item, recursive=False)
-
 #+END_SRC
 
 * Encrypting the Tar File
