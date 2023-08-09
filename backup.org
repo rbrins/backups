@@ -23,43 +23,9 @@ backup_yaml = args.backup_file
 userHomePath = os.path.expanduser('~')
 #+END_SRC
 
-* Reading the Backup Configuration
+* Create files to backup list from config file
 
-** Sample Yaml File
-#+BEGIN_SRC yaml
----
-include:
-  - "dir1"
-  - "dir2/subdir"
-  - "dir3/specific_file"
-
-exclude:
-  - "dir4"
-  - "dir1/subdir1"
-  - "dir1/specific_file"
-
-last_backup: timestamp
-backup_type: "incremental" or "full"
-#+END_SRC
-
-** Reading the .backup.yml file
-#+BEGIN_SRC python :tangle yes
-with open(backup_yaml, 'r') as config_file:
-    backup_config = yaml.safe_load(config_file)
-
-  #print(backup_config)
-  #print(backup_config['backup_type'])
-#+END_SRC
-
-** backup_config['include'] is a list
-#+BEGIN_SRC python :tangle no
-['~/.ssh', '~/.dotfiles', '~/org', '~/Documents', '~/Pictures', '~/projects']
-<class 'list'>
-#+END_SRC
-
-
-* Functions to Create file list from config file
-
+** Methods for generating the lists
 #+BEGIN_SRC python :tangle yes
 def expandPath(path):
     """Adding the home directory path if a  ~ is present"""
@@ -67,19 +33,12 @@ def expandPath(path):
         return userHomePath + path[1:]
     return path
 
-def expandHomePaths(pathList):
-    """Returns list of all expanded paths, to pass into os.listdir"""
-    expandedLists = []
-    for path in pathList:
-        expandedLists.append(expandPath(path))
-    return expandedLists
-
-#def addPath2DirList(directory):
-#    """Returns directory list of contents with full path"""
-#    fullPathList = []
-#    for child in os.listdir(directory):
-#        fullPathList.append(directory + "/" + child)
-#    return fullPathList
+#def expandHomePaths(pathList):
+#    """Returns list of all expanded paths, to pass into os.listdir"""
+#    expandedLists = []
+#    for path in pathList:
+#        expandedLists.append(expandPath(path))
+#    return expandedLists
 
 def addFullPath(path, directory):
     return (directory + "/" + path)
@@ -109,13 +68,70 @@ def listAllContents(homePath_BackupConfig):
 
 #+END_SRC
 
+** Methods for comparing the lists
+
+** Creating the file backup file list (no directories)
+
+#+BEGIN_SRC python :tangle yes
+
+#+END_SRC
+
+
+
+* Reading the Backup Configuration
+
+** Sample Yaml File
+#+BEGIN_SRC yaml
+---
+include:
+  - "dir1"
+  - "dir2/subdir"
+  - "dir3/specific_file"
+
+exclude:
+  - "dir4"
+  - "dir1/subdir1"
+  - "dir1/specific_file"
+
+last_backup: timestamp
+backup_type: "incremental" or "full"
+#+END_SRC
+
+** Reading the .backup.yml file
+#+BEGIN_SRC python :tangle yes
+with open(backup_yaml, 'r') as config_file:
+    backup_config = yaml.safe_load(config_file)
+
+try:
+    includes_Paths = list(map(expandPath, backup_config['include']))
+
+except:
+    print("[E] No include section within backup yaml file, exiting")
+    exit(1)
+
+try:
+    excludes_Paths = list(map(expandPath, backup_config['exclude']))
+    # This is where the comparison can be created
+except:
+    print("[W] No exclude section within backup yaml file, continuing")
+#+END_SRC
+
+** backup_config['include'] is a list
+#+BEGIN_SRC python :tangle no
+['~/.ssh', '~/.dotfiles', '~/org', '~/Documents', '~/Pictures', '~/projects']
+<class 'list'>
+#+END_SRC
+
+
 * Full backup type selection
 If the full backup type is selected then I'm just going to create a file list of what to include, then remove anything excluded.
 
 #+BEGIN_SRC python :tangle yes
 if(backup_config['backup_type'] == "full"):
     print("Proceeding to full backup")
-allContents = listAllContents(expandHomePaths(backup_config['include']))
+
+
+allContents = listAllContents(includes_Paths)
 
 with open("./.tmpAllContentsList","w") as tmpList:
     for item in allContents:
