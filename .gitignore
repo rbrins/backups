@@ -2,3 +2,4 @@
 myTar.tar
 *~
 .tmpAllContentsList
+*.enc
