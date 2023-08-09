@@ -13,21 +13,28 @@ import yaml
 import argparse
 import os
 import tarfile
+import datetime
 
 parser = argparse.ArgumentParser(prog='Simple Backups')
 parser.add_argument('-c', '--backupConfig', required=False, default=".backups.yml")
-parser.add_argument('-b', '--tarFileName', required=False, default="myTar.tar")
-
 args = parser.parse_args()
 
-backup_yaml = args.backupConfig
-tarFileName = args.tarFileName
-
+# Global Variables based on System
+timestamp = str(datetime.datetime.now().timestamp())[:10]
 userHomePath = os.path.expanduser('~')
+
+# Optional Argument Global Variables
+backup_yaml = args.backupConfig
+
+# Derived Global Variables
+tarFileName = timestamp + "-myTar.tar"
+encFileName = tarFileName + ".enc"
 #+END_SRC
 
 * Create files to backup list from config file
-** Methods for generating the lists
+** Methods for generating the lists of file names
+Created to be somewhat functional programming in nature. With intention to have any same input would have the same output and with the ability to map to items of a list.
+
 #+BEGIN_SRC python :tangle yes
 def expandPath(path):
     """Adding the home directory path if a  ~ is present"""
@@ -58,15 +65,17 @@ def flatten(list1):
         for item in sublist:
             flat_list.append(item)
     return flat_list
-
-
 #+END_SRC
 
-** Methods for comparing the lists
+** Methods for subtracting lists
 - list method ~remove~ should remove an item by its value
   - only removes the first occurence 
   - error if no instance
-- using sets can subtract from each other
+- using sets can subtract from each other 
+  - stackover flow stated this was more efficient
+  - even if it is not, it is much cleaner 
+  - IF we wanted what was removed, we would need to do more
+
 Will make sure that each list is only unique valuies, which allows us to use remove easily.
 
 #+BEGIN_SRC python :tangle yes
@@ -77,7 +86,8 @@ def removeListFromList(list1, list2):
 
 * Reading the Backup Configuration
 ** Sample Yaml File
-#+BEGIN_SRC yaml
+Will add ~exclude_ext~ key at some point
+#+BEGIN_SRC yaml :tangle no
 ---
 include:
   - "dir1"
@@ -91,71 +101,127 @@ exclude:
 
 last_backup: timestamp
 backup_type: "incremental" or "full"
+gpg_public_key_recipient: "user@example.com"
 #+END_SRC
 
-** backup_config['include'] is a list
+*** backup_config['include'] is a list
 sample output of what the ~backup_config['include']~ value contains
 #+BEGIN_SRC python :tangle no
 ['~/.ssh', '~/.dotfiles', '~/org', '~/Documents', '~/Pictures', '~/projects']
 <class 'list'>
 #+END_SRC
 
+** YAML Reader and Checker
+Reads the backup config file. 
+
+Then checking function to ensure the key:value loaded exist. This is EASILY extensible to make sure it is the right kinds of value too at a later date. 
+It tries to abstract the work so that it can be used with any of the keys we care about.
+
+#+BEGIN_SRC python :tangle yes
+def backupConfig_Reader(backup_yaml):
+    with open(backup_yaml, 'r') as config_file:
+        backup_config = yaml.safe_load(config_file)
+    return backup_config
+
+def checkConfigKey(backup_config, keyName, exiting=True, default=""):
+    try:
+        print("[.] Reading {} in Backup Yaml File".format(keyName))
+        return backup_config[keyName]
+    except:
+        print("[E] No {} in Backup Yaml File".format(keyName))
+        if exiting == True:
+            exit(1)
+        else:
+            return default
+#+END_SRC
+
 ** Reading the .backup.yml file
 #+BEGIN_SRC python :tangle yes
-with open(backup_yaml, 'r') as config_file:
-    backup_config = yaml.safe_load(config_file)
+backup_config = backupConfig_Reader(backup_yaml)
 
-try:
-    includes_Paths = list(map(expandPath, backup_config['include']))
-    includesAllFiles = flatten(list(map(getAllSubContents, includes_Paths)))
+backup_type = checkConfigKey(backup_config, 'backup_type')
 
-except:
-    print("[E] No include section within backup yaml file, exiting")
-    exit(1)
+last_backup_timestamp = checkConfigKey(backup_config, 'last_backup', exiting=False, default=0)
 
+gpg_public_key_recipient = checkConfigKey(backup_config, 'gpg_public_key_recipient')
 
-try:
-    excludes_Paths = list(map(expandPath, backup_config['exclude']))
-    excludesAllFiles = flatten(list(map(getAllSubContents, excludes_Paths)))
-    comparedAllFiles = removeListFromList(includesAllFiles, excludesAllFiles)
-except:
-    print("[W] No exclude section within backup yaml file, continuing")
-    # defaulting to includes only
-    comparedAllFiles = includesAllFiles
+includes_Paths = list(map(expandPath, checkConfigKey(backup_config, 'include')))
+includesAllFiles = flatten(list(map(getAllSubContents, includes_Paths)))
+
+excludes_Paths = list(map(expandPath, checkConfigKey(backup_config, 'exclude', exiting=False, default=[])))
+#if excludes_Paths == False:
+#    comparedAllFiles = includesAllFiles
+#else:
+excludesAllFiles = flatten(list(map(getAllSubContents, excludes_Paths)))
+    # could keep this, but the remove list from list might be useful for incremental
+    #comparedAllFiles = list(set(includesAllFiles) - set(excludesAllfiles))
+comparedAllFiles = removeListFromList(includesAllFiles, excludesAllFiles)
+
 #+END_SRC
 
 ** Create text file with list of all files
-
+Depricated and doesn't need to be used when using python's builtin tar library.
 #+BEGIN_SRC python :tangle yes
-with open("./.tmpAllContentsList","w") as tmpList:
-    for item in comparedAllFiles:
-        tmpList.write(item + "\n")
+#with open("./.tmpAllContentsList","w") as tmpList:
+#    for item in comparedAllFiles:
+#        tmpList.write(item + "\n")
 #+END_SRC
 
-
-
 * Backup type selection
+~finalAllFiles~ is the common name that will be used as the result from either full or incremental. Giving the Tar file and Encryption function a common point.
 
 ** Full Backup Type
 If the full backup type is selected then I'm just going to create a file list of what to include, then remove anything excluded.
 
 #+BEGIN_SRC python :tangle yes
-if(backup_config['backup_type'] == "full"):
-    print("Proceeding to full backup")
+if(backup_type == "full"):
+    print("[.] Proceeding to full backup")
     finalAllFiles = comparedAllFiles
 
 #+END_SRC
 
-** Incremental Backup Type
-
-* Writing the Tar File
+** Per File Incremental Backup Type
+Compare last backup time with last modified time on the file.
+If the backup time is older than the last modified, add the file to the incremental backup.
 
 #+BEGIN_SRC python :tangle yes
+
+
+if((backup_type == "incremental") and (last_backup_timestamp > 0)):
+    print("[.] Proceeding to incremental backup")
+  
+#+END_SRC
+
+
+* Writing the Tar File
+Not sure if this actually compresses anything.
+
+#+BEGIN_SRC python :tangle yes
+print("[.] Starting to open and write Tar File")
 
 with tarfile.open(tarFileName, "x:gz") as tf:
     for item in finalAllFiles:
         tf.add(item, recursive=False)
+
 #+END_SRC
 
-
 * Encrypting the Tar File
+with public key of the recipient
+~gpg --output doc.gpg --encrypt --recipient bob@example.com doc_to_be_encrypted~
+
+#+BEGIN_SRC python :tangle yes
+print("[.] Starting to encrypt Tar File")
+
+encryptCommand = "gpg --output " + encFileName + " --encrypt --recipient " + gpg_public_key_recipient + " " + tarFileName
+
+os.system(encryptCommand)
+#+END_SRC
+
+* Removing the PlainText Tar File
+Guidance was to check if the file existed before deleting it. I'm not sure I could make it this far without it being existed.
+
+#+BEGIN_SRC python :tangle yes
+print("[.] Removing Tar File")
+
+os.remove(tarFileName)
+#+END_SRC

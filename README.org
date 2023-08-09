@@ -74,7 +74,7 @@ exclude:
 last_backup: timestamp
 backup_type: "incremental" or "full"
 
-
+gpg_public_key_recipient: "email@to.public.key"
 #+END_SRC
 
 
@@ -93,3 +93,4 @@ tar -cvpzf ~/backups/$timestamp-backup.tar.gz --exclude=~/backups/$timestamp-bac
 tar -cvf my_files.tar file1 file2
 #+END_SRC
 ~tar -cvf allfiles.tar -T mylist.txt~ should tar everything in the text file.
+
