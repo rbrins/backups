@@ -33,38 +33,40 @@ def expandPath(path):
         return userHomePath + path[1:]
     return path
 
-#def expandHomePaths(pathList):
-#    """Returns list of all expanded paths, to pass into os.listdir"""
-#    expandedLists = []
-#    for path in pathList:
-#        expandedLists.append(expandPath(path))
-#    return expandedLists
-
-def addFullPath(path, directory):
-    return (directory + "/" + path)
+def addFullPath(child, directory):
+    """Returns full path of child in a directory"""
+    return (directory + "/" + child)
           
 def getAllSubContents(directory):
     """Recurses through a directory for all subcontents"""
     allSubContents = []
-    for path in os.listdir(directory):
-        fullPath = addFullPath(path, directory)
+    for child in os.listdir(directory):
+        fullPath = addFullPath(child, directory)
         if os.path.isdir(fullPath) == True:
             #print(fullPath)
             allSubContents.extend(getAllSubContents(fullPath))
         elif os.path.isfile(fullPath):
-            allSubContents.append(directory + "/" + path)
+            allSubContents.append(directory + "/" + child)
     return allSubContents
 
-def listAllContents(homePath_BackupConfig):
-    """Returns list of all child contents of the backup list"""
-    # this expects the backup list to have full paths generated
-    allContentsList = []
-    for path in homePath_BackupConfig:         
-        try:
-            allContentsList.extend(getAllSubContents(path))
-        except Exception as e:
-            print(e)
-    return allContentsList
+def flatten(list1):
+    """Takes list of lists and converts to single flat list"""
+    flat_list = []
+    for sublist in list1:
+        for item in sublist:
+            flat_list.append(item)
+    return flat_list
+
+#def listAllContents(homePath_BackupConfig):
+#    """Returns list of all child contents of the backup list"""
+#    # this expects the backup list to have full paths generated
+#    allContentsList = []
+#    for path in homePath_BackupConfig:         
+#        try:
+#            allContentsList.extend(getAllSubContents(path))
+#        except Exception as e:
+#            print(e)
+#    return allContentsList
 
 #+END_SRC
 
@@ -104,6 +106,7 @@ with open(backup_yaml, 'r') as config_file:
 
 try:
     includes_Paths = list(map(expandPath, backup_config['include']))
+    includesAllFiles = flatten(list(map(getAllSubContents, includes_Paths)))
 
 except:
     print("[E] No include section within backup yaml file, exiting")
@@ -131,10 +134,9 @@ if(backup_config['backup_type'] == "full"):
     print("Proceeding to full backup")
 
 
-allContents = listAllContents(includes_Paths)
+#allContents = listAllContents(includes_Paths)
 
 with open("./.tmpAllContentsList","w") as tmpList:
-    for item in allContents:
+    for item in includesAllFiles:
         tmpList.write(item + "\n")
-
 #+END_SRC
