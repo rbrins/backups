@@ -12,19 +12,21 @@ Literate programming to be able to test individual steps in a backup or run all 
 import yaml
 import argparse
 import os
+import tarfile
 
 parser = argparse.ArgumentParser(prog='Simple Backups')
-parser.add_argument('-b', '--backup-file', required=False, default=".backups.yml")
+parser.add_argument('-c', '--backupConfig', required=False, default=".backups.yml")
+parser.add_argument('-b', '--tarFileName', required=False, default="myTar.tar")
 
 args = parser.parse_args()
 
-backup_yaml = args.backup_file
+backup_yaml = args.backupConfig
+tarFileName = args.tarFileName
 
 userHomePath = os.path.expanduser('~')
 #+END_SRC
 
 * Create files to backup list from config file
-
 ** Methods for generating the lists
 #+BEGIN_SRC python :tangle yes
 def expandPath(path):
@@ -115,28 +117,45 @@ except:
 try:
     excludes_Paths = list(map(expandPath, backup_config['exclude']))
     excludesAllFiles = flatten(list(map(getAllSubContents, excludes_Paths)))
-    finalAllFiles = removeListFromList(includesAllFiles, excludesAllFiles)
+    comparedAllFiles = removeListFromList(includesAllFiles, excludesAllFiles)
 except:
     print("[W] No exclude section within backup yaml file, continuing")
     # defaulting to includes only
-    finalAllFiles = includesAllFiles
+    comparedAllFiles = includesAllFiles
 #+END_SRC
 
 ** Create text file with list of all files
 
 #+BEGIN_SRC python :tangle yes
 with open("./.tmpAllContentsList","w") as tmpList:
-    for item in finalAllFiles:
+    for item in comparedAllFiles:
         tmpList.write(item + "\n")
 #+END_SRC
 
-* Full backup type selection
+
+
+* Backup type selection
+
+** Full Backup Type
 If the full backup type is selected then I'm just going to create a file list of what to include, then remove anything excluded.
 
 #+BEGIN_SRC python :tangle yes
 if(backup_config['backup_type'] == "full"):
     print("Proceeding to full backup")
-
-
+    finalAllFiles = comparedAllFiles
 
 #+END_SRC
+
+** Incremental Backup Type
+
+* Writing the Tar File
+
+#+BEGIN_SRC python :tangle yes
+
+with tarfile.open(tarFileName, "x:gz") as tf:
+    for item in finalAllFiles:
+        tf.add(item, recursive=False)
+#+END_SRC
+
+
+* Encrypting the Tar File

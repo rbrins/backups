@@ -92,3 +92,4 @@ tar -cvpzf ~/backups/$timestamp-backup.tar.gz --exclude=~/backups/$timestamp-bac
 #+BEGIN_SRC shell
 tar -cvf my_files.tar file1 file2
 #+END_SRC
+~tar -cvf allfiles.tar -T mylist.txt~ should tar everything in the text file.

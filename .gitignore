@@ -1,1 +1,4 @@
 .backups.yml
+myTar.tar
+*~
+.tmpAllContentsList
