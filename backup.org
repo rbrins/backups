@@ -57,31 +57,23 @@ def flatten(list1):
             flat_list.append(item)
     return flat_list
 
-#def listAllContents(homePath_BackupConfig):
-#    """Returns list of all child contents of the backup list"""
-#    # this expects the backup list to have full paths generated
-#    allContentsList = []
-#    for path in homePath_BackupConfig:         
-#        try:
-#            allContentsList.extend(getAllSubContents(path))
-#        except Exception as e:
-#            print(e)
-#    return allContentsList
 
 #+END_SRC
 
 ** Methods for comparing the lists
-
-** Creating the file backup file list (no directories)
+- list method ~remove~ should remove an item by its value
+  - only removes the first occurence 
+  - error if no instance
+- using sets can subtract from each other
+Will make sure that each list is only unique valuies, which allows us to use remove easily.
 
 #+BEGIN_SRC python :tangle yes
-
+def removeListFromList(list1, list2):
+    return list(set(list1) - set(list2))
 #+END_SRC
 
 
-
 * Reading the Backup Configuration
-
 ** Sample Yaml File
 #+BEGIN_SRC yaml
 ---
@@ -99,6 +91,13 @@ last_backup: timestamp
 backup_type: "incremental" or "full"
 #+END_SRC
 
+** backup_config['include'] is a list
+sample output of what the ~backup_config['include']~ value contains
+#+BEGIN_SRC python :tangle no
+['~/.ssh', '~/.dotfiles', '~/org', '~/Documents', '~/Pictures', '~/projects']
+<class 'list'>
+#+END_SRC
+
 ** Reading the .backup.yml file
 #+BEGIN_SRC python :tangle yes
 with open(backup_yaml, 'r') as config_file:
@@ -112,19 +111,24 @@ except:
     print("[E] No include section within backup yaml file, exiting")
     exit(1)
 
+
 try:
     excludes_Paths = list(map(expandPath, backup_config['exclude']))
-    # This is where the comparison can be created
+    excludesAllFiles = flatten(list(map(getAllSubContents, excludes_Paths)))
+    finalAllFiles = removeListFromList(includesAllFiles, excludesAllFiles)
 except:
     print("[W] No exclude section within backup yaml file, continuing")
+    # defaulting to includes only
+    finalAllFiles = includesAllFiles
 #+END_SRC
 
-** backup_config['include'] is a list
-#+BEGIN_SRC python :tangle no
-['~/.ssh', '~/.dotfiles', '~/org', '~/Documents', '~/Pictures', '~/projects']
-<class 'list'>
-#+END_SRC
+** Create text file with list of all files
 
+#+BEGIN_SRC python :tangle yes
+with open("./.tmpAllContentsList","w") as tmpList:
+    for item in finalAllFiles:
+        tmpList.write(item + "\n")
+#+END_SRC
 
 * Full backup type selection
 If the full backup type is selected then I'm just going to create a file list of what to include, then remove anything excluded.
@@ -134,9 +138,5 @@ if(backup_config['backup_type'] == "full"):
     print("Proceeding to full backup")
 
 
-#allContents = listAllContents(includes_Paths)
 
-with open("./.tmpAllContentsList","w") as tmpList:
-    for item in includesAllFiles:
-        tmpList.write(item + "\n")
 #+END_SRC
